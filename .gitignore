@@ -1,0 +1,7 @@
+__pycache__/
+logs/
+*_old.exe
+hexcharge_engine
+build/
+dist/
+*.spec
