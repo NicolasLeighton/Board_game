@@ -20,7 +20,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(HERE, "config.py")
@@ -210,11 +210,82 @@ def save(changes: Dict, path: str = CONFIG_PATH) -> Optional[str]:
 
 
 # ======================================================================
+# Keeping the openings when the board changes size
+# ======================================================================
+# The board's shape is worked out here for any size, rather than asked of
+# Rules.py, because Rules only knows the size the game was started with.
+
+def _on_board(row: int, col: int, radius: int) -> bool:
+    n = 2 * radius + 1
+    return 0 <= row < n and 0 <= col < n and abs(row + col - 2 * radius) <= radius
+
+
+def _rank_points(rank: int, radius: int, flat: bool):
+    """White's rank `rank`, as the (row, col) of each token in a setup line
+    - the same as Rules.rank_cells, for a board of any size."""
+    n = 2 * radius + 1
+    if flat:
+        row = n - rank
+        return [(row, c) for c in range(n) if _on_board(row, c, radius)]
+    return [(min(n - 1, n - 1 + radius - c) - rank + 1, c) for c in range(n)]
+
+
+def _on_whites_half(row: int, col: int, radius: int, flat: bool) -> bool:
+    n = 2 * radius + 1
+    if not _on_board(row, col, radius):
+        return False
+    if flat:
+        return n - row < row + 1
+    bottom = lambda c: min(n - 1, n - 1 + radius - c)
+    white = bottom(col) - row + 1
+    black = bottom(n - 1 - col) - (n - 1 - row) + 1
+    return white < black
+
+
+def fit_setup(lines: List[str], radius: int, flat: bool) -> Tuple[List[str], int]:
+    """The opening, keeping only the pieces that stand on White's half of a
+    board of this size, and as many ranks as it takes. Returns the lines
+    and how many pieces had to go."""
+    kept, lost = {}, 0
+    for offset, line in enumerate(lines):
+        points = _rank_points(offset + 1, radius, flat)
+        for k, token in enumerate(line.split()):
+            if token == ".":
+                continue
+            if k < len(points) and _on_whites_half(*points[k], radius, flat):
+                kept[points[k]] = token
+            else:
+                lost += 1
+    out = []
+    rank = 1
+    while any(_on_whites_half(r, c, radius, flat) for r, c in _rank_points(rank, radius, flat)):
+        out.append(" ".join(kept.get(p, ".") for p in _rank_points(rank, radius, flat)))
+        rank += 1
+    while len(out) > 1 and set(out[-1].split()) == {"."}:
+        out.pop()                                  # no empty ranks at the end
+    return out, lost
+
+
+def resize_openings(values: Dict, new_radius: int) -> Tuple[Dict, int]:
+    """Both openings moved onto a board of another size: re-centred, with
+    anything that no longer fits on White's half taken off. Returns the new
+    lines for both, and how many pieces didn't fit in the opening that is
+    in use."""
+    old = values["BOARD_RADIUS"]
+    point = resize_setup(values["WHITE_SETUP"], old, new_radius, force=True)
+    flat = resize_setup_flat(values["WHITE_SETUP_FLAT"], old, new_radius, force=True)
+    point, lost_point = fit_setup(point, new_radius, flat=False)
+    flat, lost_flat = fit_setup(flat, new_radius, flat=True)
+    in_use = lost_flat if values.get("BOARD_ORIENTATION") == "flat" else lost_point
+    return {"WHITE_SETUP": point, "WHITE_SETUP_FLAT": flat}, in_use
+
+
+# ======================================================================
 # Keeping the opening when the board changes size
 # ======================================================================
 
-def resize_setup_flat(lines: List[str], old_radius: int,
-                      new_radius: int) -> Optional[List[str]]:
+def resize_setup_flat(lines: List[str], old_radius: int, new_radius: int,
+                      force: bool = False) -> Optional[List[str]]:
     """The flat-side opening on a board of another size. Every row gains or
     loses one point per ring, so it can't stay exactly centred: the new
     point goes at alternate ends, ring by ring, which keeps the army within
@@ -229,18 +300,23 @@ def resize_setup_flat(lines: List[str], old_radius: int,
             if grow:
                 rows[k] = (["."] + tokens) if left else (tokens + ["."])
                 continue
+            if not tokens:
+                continue
             ends = [0, len(tokens) - 1] if left else [len(tokens) - 1, 0]
             for end in ends:
                 if tokens[end] == ".":
                     del tokens[end]
                     break
             else:
-                return None
+                if not force:
+                    return None
+                del tokens[ends[0]]                # forced: the piece goes
         radius += 1 if grow else -1
     return [" ".join(tokens) for tokens in rows]
 
 
-def resize_setup(lines: List[str], old_radius: int, new_radius: int) -> Optional[List[str]]:
+def resize_setup(lines: List[str], old_radius: int, new_radius: int,
+                 force: bool = False) -> Optional[List[str]]:
     """The same opening on a board of another size: one empty file added
     or taken away at each side per ring, so the army stays centred on the
     middle file. None if shrinking would push a piece off the board."""
@@ -252,7 +328,7 @@ def resize_setup(lines: List[str], old_radius: int, new_radius: int) -> Optional
             tokens = ["."] * grow + tokens + ["."] * grow
         else:
             cut = -grow
-            if any(t != "." for t in tokens[:cut] + tokens[len(tokens) - cut:]):
+            if not force and any(t != "." for t in tokens[:cut] + tokens[len(tokens) - cut:]):
                 return None
             tokens = tokens[cut:len(tokens) - cut]
         out.append(" ".join(tokens))

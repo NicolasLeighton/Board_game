@@ -259,17 +259,15 @@ class ConfigScreen:
         if new == value:
             return
         if key == "BOARD_RADIUS":
-            # Keep both openings on the new board - the one for each way
-            # it can be turned.
-            point = E.resize_setup(self.values["WHITE_SETUP"], value, new)
-            flat = E.resize_setup_flat(self.values["WHITE_SETUP_FLAT"], value, new)
-            if point is None or flat is None:
-                which = "point-to-point" if point is None else "flat-side"
-                self.say(f"The {which} opening has pieces on the board's outer edge - "
-                         "move them in on the Opening page first.", bad=True)
-                return
-            self.values["WHITE_SETUP"] = point
-            self.values["WHITE_SETUP_FLAT"] = flat
+            # Both openings - one for each way the board can be turned -
+            # follow it onto the new board. Whatever no longer fits on
+            # White's half is taken off rather than blocking the change.
+            openings, lost = E.resize_openings(self.values, new)
+            self.values.update(openings)
+            self.values[key] = new
+            self.say(f"{lost} piece{'s' if lost != 1 else ''} didn't fit on the smaller "
+                     "board and came off - check the opening." if lost else "")
+            return
         self.values[key] = new
         self.say("")
 
@@ -372,11 +370,11 @@ class ConfigScreen:
             self.buttons[f"brush:{name}"] = rect
         y += ((len(names) + cols - 1) // cols) * (th + gap) + 6
 
-        generals = counts.get(R.ROYAL, 0)
-        status = (f"{sum(counts.values())} pieces each"
-                  if generals == 1 else f"needs exactly one {R.ROYAL} - has {generals}")
-        img = F.small.render(fit_text(F.small, status, L.panel_w - 2 * L.pad), True,
-                             MUTED if generals == 1 else BAD)
+        total = sum(counts.values())
+        status = f"{total} piece{'' if total == 1 else 's'} each"
+        if total and not counts.get(R.ROYAL):
+            status += f" - no {R.ROYAL} yet"
+        img = F.small.render(fit_text(F.small, status, L.panel_w - 2 * L.pad), True, MUTED)
         screen.blit(img, (x0, y))
 
         bh = int(clamp(L.win_h * 0.06, 36, 50))
@@ -392,6 +390,10 @@ class ConfigScreen:
         if erase or self.brush is None or self.cells.get(cell) == self.brush:
             self.cells.pop(cell, None)
         else:
+            if self.brush == R.ROYAL:
+                # Only one General: placing him again moves him.
+                for other in [p for p, n in self.cells.items() if n == R.ROYAL]:
+                    del self.cells[other]
             self.cells[cell] = self.brush
         self.values[R.SETUP_NAME] = setup_from_cells(self.cells)
 

@@ -73,6 +73,11 @@ def setup_line(tuning: Optional[Dict] = None) -> str:
     for key, value in ai_config.ENGINE_WEIGHTS.items():
         bits.append(f"weight_{key}={value}")
     # Whatever makes this difficulty what it is.
+    # The mate finder, which runs at every level.
+    mate = getattr(ai_config, "MATE_SEARCH", {}) or {}
+    bits.append(f"mate_moves={int(mate.get('moves', 4))}")
+    bits.append(f"mate_seconds={float(mate.get('seconds', 0.4))}")
+    bits.append(f"mate_defend={int(bool(mate.get('defend', True)))}")
     for key, value in (tuning or {}).items():
         bits.append(f"{key}={value}")
     # Where to report each search - see ENGINE_LOG in ai_config.py. Paths
@@ -303,8 +308,27 @@ def available() -> bool:
     return inspect_engine() is None
 
 
+# The menu's levels: the named ones, then Custom.
+CUSTOM_INDEX = len(DIFFICULTIES)
+
+
+def custom_settings() -> Dict:
+    """The Custom level's dials, with anything missing from ai_config.py
+    filled in."""
+    base = {"depth": 6, "seconds": 3.0, "branching": 40, "qply": 6,
+            "noise": 30.0, "window": 150.0, "aggression": 50}
+    base.update(getattr(ai_config, "CUSTOM_DIFFICULTY", {}) or {})
+    return base
+
+
 def make_ai(owner: str, difficulty_index: int) -> "CppPlayer":
     """Builds the opponent. Raises EngineError if the engine won't run."""
+    if difficulty_index >= CUSTOM_INDEX:
+        c = custom_settings()
+        tuning = {"branching": int(c["branching"]), "qply": int(c["qply"]),
+                  "noise": float(c["noise"]), "window": float(c["window"]),
+                  "aggression": float(c["aggression"]), "level": "Custom"}
+        return CppPlayer(owner, int(c["depth"]), float(c["seconds"]), tuning=tuning)
     level = DIFFICULTIES[max(0, min(difficulty_index, len(DIFFICULTIES) - 1))]
     _name, depth, budget, branching, qply, noise, window = level
     tuning = {"branching": branching, "qply": qply,

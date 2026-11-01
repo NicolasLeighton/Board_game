@@ -144,13 +144,20 @@ the computer play itself. Five difficulties from Recruit to Marshal.
 
 - **Settings** shows every switch as an on/off toggle and every number or
   choice with arrows on either side. Changed settings turn gold until you
-  save. Changing the board size keeps your opening centred on the new board.
+  save. Changing the board size never gets stuck: both openings (point
+  and flat) move onto the new board, centred, and any piece that no longer
+  fits on White's half comes off, and the screen says how many. To edit the
+  opening on the new board, save first: the opening page draws the board
+  the game was started with.
 - **Edit opening** shows the board itself. Pick a piece from the tray and
   click points on your half to place it; click it again, use Erase, or
   right-click to clear a point. Black's half shows the copy Black gets, and
-  the tray counts each piece.
+  the tray counts each piece. Placing a General where there already is one
+  moves him. "Clear the board" empties it altogether.
 - **Save & restart** first checks the game would start with the new
-  settings: exactly one General, an opening that fits the board, and so on.
+  settings: at most one General, an opening that fits the board, and so on.
+  An empty opening saves too, for laying one out in the sandbox. A game
+  started from an opening where White can't move simply says so.
   If something's wrong it says what, and nothing is written. Otherwise it
   writes the values into `config.py`, keeps every comment, and restarts
   the game so the rules and the engine pick them up.
@@ -215,6 +222,56 @@ The engine knows the draws. It is sent every position the game has been
 through, so it sees which moves would bring one round for the third time
 and scores them as a draw; it scores stalemate as a draw too. Ahead, it
 steers clear of both; behind, it will go looking for them.
+
+### The mate finder
+
+The search only sees a mate that falls inside the depth its level allows,
+so a weak level would hardly ever find one, and would walk into them. So
+every level, Recruit included, also runs a mate finder (`MATE_SEARCH` in
+`ai_config.py`). It tries only checking moves for the attacker and every
+reply for the defender, which is narrow enough to see mates up to 4 moves
+deep in a fraction of a second, whatever the level's own depth and time.
+
+- **Before the search:** if it has a forced mate, it plays it at once,
+  even at a level that otherwise makes mistakes on purpose.
+- **After the search:** if the move it chose lets you force mate, it plays
+  the best move that doesn't. `"defend": False` turns this half off.
+
+It spends at most `"seconds"` (0.4) on each half, so a weak level may take
+up to a second longer over a move when there are checks about. The engine
+log says when it found a mate or dodged one.
+
+### Custom difficulty
+
+The sixth level on the menu, **Custom**. Clicking it opens a page with
+every dial set by hand:
+
+| Dial | What it does |
+|---|---|
+| Look-ahead | how many moves ahead it may look, time allowing |
+| Thinking time | the most it thinks over one move |
+| Moves considered | how many moves per position it looks at; fewer overlooks things |
+| Following captures | captures it follows past the horizon; at 0 it leaves pieces hanging |
+| Mistakes | how often it plays a move that isn't its best |
+| Worst slip | how much worse than its best such a move may be (a Pawn is 100) |
+| Aggression | 0 to 100, see below |
+
+**Start from** copies one of the five named levels to tweak from there.
+**Use these** saves the dials into `ai_config.py` (`CUSTOM_DIFFICULTY`),
+so they're kept for next time, and makes Custom the chosen level. Click
+Custom again to change them.
+
+**Aggression** is 50 on every named level, which is how the engine has
+always played. Above 50 it:
+
+- cares more about the enemy General's safety than its own: squares round
+  him it covers, check given, how boxed in he is;
+- starts hunting him sooner, at 100 even when material is level;
+- counts a draw as a small loss (up to 40, at 100), so it steers away from
+  repetitions and stalemates.
+
+Below 50 it does the opposite: it guards its own General first, waits
+until it's well ahead before going after his, and is glad of a draw.
 
 ---
 

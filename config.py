@@ -29,7 +29,7 @@ the computer PLAYS.
 #
 # The board and every move are the same either way; what changes is which
 # points are each army's home, and so the opening.
-BOARD_ORIENTATION = "point"
+BOARD_ORIENTATION = 'point'
 
 # How many rings of cells surround the centre one. 5 is Glinski's board:
 # 91 cells, files a-l (there is no j), the middle file eleven cells long.
@@ -68,7 +68,7 @@ SHOW_MOVEMENT_HINTS = True
 #   2 - click only: click a piece, then click where it goes
 #   3 - drag only: pick a piece up and let go where it goes. A click still
 #       selects a piece and shows where it can move.
-MOVEMENT_TYPE = 1
+MOVEMENT_TYPE = 3
 
 # Right-click arrows snap to the six lines and the Knight's leaps unless
 # this is True.
@@ -126,10 +126,9 @@ PIECE_CODES = {
 
 WHITE_SETUP = [
     #  a  b  c  d  e  f  g  h  i  k  l
-    ".  Pw Ch Kn Cn Ge Cn Kn Ch Pw .",
-    ".  .  Pw .  Gu Gu Gu .  Pw .  .",
+    ".  Ch Kn Cn Gu Ge Gu Cn Kn Ch .",
+    ".  Pw .  .  .  .  .  .  .  Pw .",
     ".  .  .  Pw .  .  .  Pw .  .  .",
-    ".  .  .  .  Pw .  Pw .  .  .  .",
     ".  .  .  .  .  Pw .  .  .  .  .",
 ]
 
@@ -142,10 +141,10 @@ WHITE_SETUP = [
 # never has just one piece in front of it: no first move captures, and
 # no first move by White hands Black a capture.
 WHITE_SETUP_FLAT = [
-    "Cn .  .  .  .  Cn",
-    ".  Gu Kn Ge Kn Gu .",
-    ".  Ch .  .  .  .  Ch .",
-    "Pw Pw Pw Pw Pw Pw Pw Pw Pw",
+    ".  .  .  .  .  .",
+    ".  .  .  .  .  .  .",
+    ".  .  .  .  .  .  .  .",
+    ".  .  .  .  Ge .  .  .  .",
 ]
 
 # How Black's army is laid out from yours.

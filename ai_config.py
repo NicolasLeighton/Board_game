@@ -53,6 +53,47 @@ DIFFICULTIES = [
 ]
 DEFAULT_DIFFICULTY = 1
 
+# Every level - Recruit included, and Custom - also runs a MATE FINDER
+# beside its search, because a mate further away than the level looks
+# would otherwise never be found. It tries only checking moves for the
+# attacking side and every reply for the defender, which is narrow enough
+# to see several moves deep in a fraction of a second, whatever the
+# level's own depth and time:
+#
+#   moves    the longest forced mate it looks for, in its own moves.
+#            0 turns the finder off.
+#   seconds  the most it spends looking, before the search and again after
+#   defend   also checks that the move the level chose doesn't let YOU
+#            force a mate; if it does, it plays the best move that doesn't
+#
+# A mate found this way is played at once, even at levels that otherwise
+# make mistakes on purpose.
+MATE_SEARCH = {
+    "moves": 4,
+    "seconds": 0.4,
+    "defend": True,
+}
+
+# The sixth level on the menu, Custom: every dial above set by hand, plus
+# AGGRESSION. Choosing Custom on the menu opens a page to edit these, and
+# saving there writes them back here.
+#
+#   aggression  0 to 100. At 50 the engine plays as the levels above do.
+#               Higher, it cares more about the enemy General's safety
+#               than its own, starts hunting him sooner, and counts a draw
+#               as a small loss, so it steers away from one. Lower, it
+#               guards its own General first, waits until it is well ahead
+#               to attack, and is glad of a draw.
+CUSTOM_DIFFICULTY = {
+    "depth": 5,
+    "seconds": 1.5,
+    "branching": 28,
+    "qply": 4,
+    "noise": 60.0,
+    "window": 300.0,
+    "aggression": 90,
+}
+
 
 # ======================================================================
 # What the pieces are worth

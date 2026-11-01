@@ -43,6 +43,7 @@ import AiCpp
 import Ui
 import config
 import config_screen
+import custom_screen
 from Rules import GameState, legal_moves
 
 
@@ -177,8 +178,10 @@ def difficulty_menu_entries():
               "steady - punishes a loose piece",
               "looks several moves ahead",
               "everything it has, and it will take its time"]
-    return [(level[0], blurbs[i] if i < len(blurbs) else f"depth {level[1]}")
-            for i, level in enumerate(AiCpp.DIFFICULTIES)]
+    entries = [(level[0], blurbs[i] if i < len(blurbs) else f"depth {level[1]}")
+               for i, level in enumerate(AiCpp.DIFFICULTIES)]
+    entries.append(("Custom", custom_screen.summary()))
+    return entries
 
 
 def run_menu(window: "Window", clock):
@@ -186,6 +189,7 @@ def run_menu(window: "Window", clock):
     config, or None if the player quit."""
     menu = Ui.Menu(window.layout, window.fonts)
     menu.difficulty = AiCpp.DEFAULT_DIFFICULTY
+    menu.custom_index = AiCpp.CUSTOM_INDEX
     options = difficulty_menu_entries()
     while True:
         for event in pygame.event.get():
@@ -206,9 +210,41 @@ def run_menu(window: "Window", clock):
                     if run_config(window, clock) == "restart":
                         restart()
                     menu.resize(window.layout, window.fonts)
+                elif chosen is not None and chosen["mode"] == "custom":
+                    if run_custom(window, clock) == "use":
+                        menu.difficulty = AiCpp.CUSTOM_INDEX
+                    options = difficulty_menu_entries()
+                    menu.resize(window.layout, window.fonts)
                 elif chosen is not None:
                     return chosen
         menu.draw(window.surface, options)
+        pygame.display.flip()
+        clock.tick(60)
+
+
+def run_custom(window: "Window", clock) -> Optional[str]:
+    """The Custom difficulty page, until it is left: "use" once saved,
+    "cancel" otherwise."""
+    screen = custom_screen.CustomScreen(window.layout, window.fonts)
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    return "cancel"
+                if event.key == pygame.K_F11:
+                    window.toggle_fullscreen()
+                    screen.resize(window.layout, window.fonts)
+            if event.type == pygame.VIDEORESIZE:
+                window.resized(event.w, event.h)
+                screen.resize(window.layout, window.fonts)
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                result = screen.handle_click(event.pos)
+                if result is not None:
+                    return result
+        screen.draw(window.surface)
         pygame.display.flip()
         clock.tick(60)
 

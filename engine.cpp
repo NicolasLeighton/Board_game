@@ -12,6 +12,12 @@
 // game sends the keys of every position so far, so the search knows which
 // moves would repeat one.
 //
+// Aggression (0-100, 50 the old engine's own taste) tilts its judgement
+// towards attack or towards safety: how much it cares about the enemy
+// General's safety against its own, how early it starts hunting him, and
+// what a draw is worth to it - an aggressive engine counts a draw as a
+// small loss and steers away from one, a cautious one is glad of it.
+//
 // It also measures itself: every search reports how deep it got, how many
 // positions it looked at and how fast - in the "info" line, and in an
 // engine log if one is set up (ENGINE_LOG in ai_config.py).
@@ -85,6 +91,12 @@ struct Config {
     double mobility = 0.7, check = 45.0;
     double huntRamp = 400.0, huntEscape = 26.0, huntDistance = 6.0;
     double repetition = 55.0;
+    double aggression = 50.0;            // 0 cautious, 50 neutral, 100 reckless
+
+    // The mate finder, at every level - MATE_SEARCH in ai_config.py.
+    int mateMoves = 4;                   // looks for mates up to this many moves
+    double mateSeconds = 0.4;            // and spends at most this long, each way
+    bool mateDefend = true;              // also checks its own move doesn't allow one
 
     // The difficulty dials.
     int branching = 64, qply = 8;
@@ -104,6 +116,24 @@ int RAD = 4;                             // board radius: NN = 2 * RAD + 1
 // The board is a hexagon of hexagons stored in axial coordinates in a
 // square array: col is the file, row runs down it. Only cells within RAD
 // of the centre are on the board.
+// The side this engine is playing, set at the start of every search, so
+// aggression can tilt the judgement towards that side's attack.
+int engineSide = 0;
+
+// How much a General's safety counts, by whose General it is. Neutral at
+// aggression 50: both 1. More aggressive, the enemy's counts for more
+// (attacking him) and its own for less; less aggressive, the other way.
+inline double safetyWeight(int owner) {
+    const double a = cfg.aggression / 50.0;                 // 0 .. 2
+    return owner == engineSide ? 1.5 - 0.5 * a : a;
+}
+// A draw, as the side to move sees it: a small loss for an aggressive
+// engine, a small gain for a cautious one, nothing at 50.
+inline double drawScore(int side) {
+    const double contempt = (cfg.aggression - 50.0) * 0.8;  // -40 .. +40
+    return side == engineSide ? -contempt : contempt;
+}
+
 inline int idx(int r, int c) { return r * NN + c; }
 inline bool inside(int r, int c) {
     return r >= 0 && r < NN && c >= 0 && c < NN && std::abs(r + c - 2 * RAD) <= RAD;
@@ -534,13 +564,18 @@ double evaluate(const Board& b, int side) {
     double material = ownValue - enemyValue;
     double positional = (ownMoves - enemyMoves) * cfg.mobility + style;
     if (cfg.shelter != 0.0 || cfg.exposure != 0.0)
-        positional += generalSafety(b, side) - generalSafety(b, enemy);
-    if (royalInCheck(b, side)) positional -= cfg.check;
-    if (royalInCheck(b, enemy)) positional += cfg.check;
+        positional += generalSafety(b, side) * safetyWeight(side)
+                    - generalSafety(b, enemy) * safetyWeight(enemy);
+    if (royalInCheck(b, side)) positional -= cfg.check * safetyWeight(side);
+    if (royalInCheck(b, enemy)) positional += cfg.check * safetyWeight(enemy);
 
-    // Ahead: hunt the enemy General - box him in, close in on him.
-    if (material > 0 && enemySeat >= 0) {
-        double hunt = std::min(1.0, material / cfg.huntRamp);
+    // Ahead: hunt the enemy General - box him in, close in on him. An
+    // aggressive engine starts the hunt sooner: at aggression 100 when
+    // level, at 0 only once well ahead.
+    const double head = (side == engineSide ? 1.0 : -1.0)
+                      * (cfg.aggression - 50.0) / 50.0 * cfg.huntRamp * 0.5;
+    if (material + head > 0 && enemySeat >= 0) {
+        double hunt = std::min(1.0, (material + head) / cfg.huntRamp) * safetyWeight(enemy);
         const int ownSeat = b.royal[side];
         int safe = 0;
         const int er = enemySeat / NN, ec = enemySeat % NN;
@@ -623,6 +658,10 @@ inline void tick() {
 
 Board board;
 int sideToMove = 0;
+// Whether each side had a General when the search began. A General gone
+// from the board mid-search has been taken; one that was never there - an
+// opening laid out without him - is simply absent, and nothing is won.
+bool hadRoyal[2] = {true, true};
 
 // Repetition. gameKeys holds the key of every position the game has been
 // through, sent by the game before each search; pathKeys the positions
@@ -679,8 +718,8 @@ double quiescence(Board& b, int side, double alpha, double beta, int qply, int p
     if (ply > st.seldepth) st.seldepth = ply;
     tick();
     if (stopFlag) return 0.0;
-    if (b.royal[side ^ 1] < 0) return WIN_SCORE;
-    if (b.royal[side] < 0) return -WIN_SCORE;
+    if (b.royal[side ^ 1] < 0 && hadRoyal[side ^ 1]) return WIN_SCORE;
+    if (b.royal[side] < 0 && hadRoyal[side]) return -WIN_SCORE;
     double standPat = evaluate(b, side);
     if (standPat >= beta) return beta;
     if (standPat > alpha) alpha = standPat;
@@ -724,11 +763,11 @@ double negamax(Board& b, int side, int depth, double alpha, double beta, int ply
     if (ply > st.seldepth) st.seldepth = ply;
     tick();
     if (stopFlag) return 0.0;
-    if (b.royal[side ^ 1] < 0) return WIN_SCORE + depth;
-    if (b.royal[side] < 0) return -WIN_SCORE - depth;
+    if (b.royal[side ^ 1] < 0 && hadRoyal[side ^ 1]) return WIN_SCORE + depth;
+    if (b.royal[side] < 0 && hadRoyal[side]) return -WIN_SCORE - depth;
 
     const uint64_t key = hashOf(b, side);
-    if (timesSeen(key, ply) >= 2) return 0.0;           // third time: a draw
+    if (timesSeen(key, ply) >= 2) return drawScore(side); // third time: a draw
     pathKeys[ply] = key;
     TTEntry& slot = table[key & tableMask];
     Move ttMove;
@@ -750,7 +789,7 @@ double negamax(Board& b, int side, int depth, double alpha, double beta, int ply
     Move* mv = moveStack[ply];
     int n = generateActions(b, side, mv, MAX_MOVES);
     const bool inCheck = royalInCheck(b, side);
-    if (n == 0) return inCheck ? -WIN_SCORE - depth : 0.0;   // mated, or stalemate
+    if (n == 0) return inCheck ? -WIN_SCORE - depth : drawScore(side);   // mated, or stalemate
     orderMoves(b, side, mv, n, haveTT ? &ttMove : nullptr, ply);
     n = selectBranch(mv, n);
 
@@ -819,7 +858,85 @@ struct SearchResult {
     int rootActions = 0, rootSearched = 0;
     bool stoppedByClock = false;
     std::vector<Iteration> iterations;
+    int mateIn = 0;                      // a forced mate the mate finder found, in moves
+    int dodged = 0;                      // moves set aside for walking into a mate
 };
+
+// ---------------------------------------------------------------------
+// The mate finder
+// ---------------------------------------------------------------------
+// The main search only sees a mate inside the depth the difficulty allows,
+// so a weak level would hardly ever find one - and walk into them. This
+// runs alongside it at EVERY level, with its own small time budget
+// (MATE_SEARCH in ai_config.py): it tries only checking moves for the
+// attacker, and every reply for the defender, which is narrow enough to
+// see mates several moves deep in a fraction of a second.
+//
+// It is used both ways round. Before the search: is there a forced mate
+// for us? Then play it. After the search, on the move chosen: does it let
+// the enemy force mate? Then choose another.
+
+long long mateNodes = 0, mateNodeLimit = 4000000;
+bool mateStop = false;
+Clock::time_point mateDeadline;
+
+inline bool mateTick() {
+    if ((++mateNodes & 511) == 0 && Clock::now() > mateDeadline) mateStop = true;
+    if (mateNodes > mateNodeLimit) mateStop = true;
+    return mateStop;
+}
+
+bool defenderLost(Board& b, int d, int movesLeft);
+
+// Can `a`, to move, force mate within `movesLeft` of its own moves, giving
+// check every time? The mating move is written to `found` at the top.
+bool attackerMates(Board& b, int a, int movesLeft, Move* found) {
+    if (mateTick()) return false;
+    Move mv[MAX_MOVES];
+    const int n = generateActions(b, a, mv, MAX_MOVES);
+    const int d = a ^ 1;
+    for (int i = 0; i < n; ++i) {
+        Undo u;
+        makeMove(b, mv[i], a, u);
+        bool win = false;
+        if (b.royal[d] >= 0 && royalInCheck(b, d)) win = defenderLost(b, d, movesLeft);
+        unmakeMove(b, mv[i], a, u);
+        if (mateStop) return false;
+        if (win) { if (found) *found = mv[i]; return true; }
+    }
+    return false;
+}
+
+// `d` is in check and to move: is every reply still lost?
+bool defenderLost(Board& b, int d, int movesLeft) {
+    if (mateTick()) return false;
+    Move mv[MAX_MOVES];
+    const int n = generateActions(b, d, mv, MAX_MOVES);
+    if (n == 0) return true;                       // checkmate
+    if (movesLeft <= 1) return false;
+    for (int i = 0; i < n; ++i) {
+        Undo u;
+        makeMove(b, mv[i], d, u);
+        const bool lost = attackerMates(b, d ^ 1, movesLeft - 1, nullptr);
+        unmakeMove(b, mv[i], d, u);
+        if (mateStop || !lost) return false;
+    }
+    return true;
+}
+
+// The shortest forced mate for `a`, up to `maxMoves`, within `seconds`:
+// its length in moves, or 0 if none was found in time.
+int findMate(Board& b, int a, int maxMoves, double seconds, Move* found) {
+    if (maxMoves <= 0 || b.royal[a ^ 1] < 0 || b.royal[a] < 0) return 0;
+    mateNodes = 0;
+    mateStop = false;
+    mateDeadline = Clock::now() + std::chrono::microseconds(static_cast<long long>(seconds * 1e6));
+    for (int k = 1; k <= maxMoves; ++k) {
+        if (attackerMates(b, a, k, found)) return k;
+        if (mateStop) break;
+    }
+    return 0;
+}
 
 
 SearchResult search(Board& b, int side, int maxDepth, double seconds) {
@@ -829,6 +946,7 @@ SearchResult search(Board& b, int side, int maxDepth, double seconds) {
     started = Clock::now();
     deadline = started + std::chrono::milliseconds(static_cast<long long>(seconds * 1000));
     ++tableAge;
+    engineSide = side;
     for (auto& k : killers) k[0] = k[1] = Move{};
     for (auto& row : history) for (int& h : row) h /= 8;   // keep a little from last move
 
@@ -844,6 +962,20 @@ SearchResult search(Board& b, int side, int maxDepth, double seconds) {
     result.found = true;
 
     const int enemy = side ^ 1;
+
+    // A forced mate the main search might be too shallow to see: play it.
+    {
+        Move mate;
+        const int k = findMate(b, side, cfg.mateMoves, cfg.mateSeconds, &mate);
+        if (k > 0) {
+            result.best = mate;
+            result.score = WIN_SCORE - (2 * k - 1);
+            result.depthReached = 2 * k - 1;
+            result.mateIn = k;
+            return result;
+        }
+    }
+
     std::vector<std::pair<double, Move>> lastScores;
     std::vector<double> rootScore(n, -INF_SCORE);
     long long nodesBefore = 0;
@@ -922,6 +1054,31 @@ SearchResult search(Board& b, int side, int maxDepth, double seconds) {
             for (auto& pc : pool) if (roll <= pc.first) { result.best = pc.second; break; }
         }
     }
+
+    // Does the move chosen let the enemy force a mate the search was too
+    // shallow to see? Then take the best-scored move that doesn't.
+    if (cfg.mateDefend && cfg.mateMoves > 0 && b.royal[side] >= 0 && b.royal[enemy] >= 0) {
+        std::vector<std::pair<double, Move>> order = lastScores;
+        std::stable_sort(order.begin(), order.end(),
+                         [](const std::pair<double, Move>& x, const std::pair<double, Move>& y) {
+                             return x.first > y.first; });
+        std::vector<Move> candidates{result.best};
+        for (auto& sc : order) if (!sameMove(sc.second, result.best)) candidates.push_back(sc.second);
+        const auto until = Clock::now() + std::chrono::microseconds(static_cast<long long>(cfg.mateSeconds * 1e6));
+        const int depthCheck = std::max(1, cfg.mateMoves - 1);
+        for (size_t i = 0; i < candidates.size() && i < 12 && Clock::now() < until; ++i) {
+            Undo u;
+            makeMove(b, candidates[i], side, u);
+            Move reply;
+            const double left = std::chrono::duration<double>(until - Clock::now()).count();
+            const int k = findMate(b, enemy, depthCheck, std::max(0.01, left), &reply);
+            unmakeMove(b, candidates[i], side, u);
+            if (k == 0) {
+                if (i > 0) { result.best = candidates[i]; result.dodged = static_cast<int>(i); }
+                break;
+            }
+        }
+    }
     return result;
 }
 
@@ -987,6 +1144,8 @@ void writeLog(const SearchResult& r, int side, int askedDepth, double budget, in
     o << "  branching  " << (ebf > 0 ? fmt("%.2f", ebf) : std::string("-"))
       << " (how many times longer each extra ply took)\n";
     o << "  root       " << r.rootActions << " legal actions, " << r.rootSearched << " searched\n";
+    if (r.mateIn) o << "  mate       the mate finder found mate in " << r.mateIn << " - played at once\n";
+    if (r.dodged) o << "  mate       the move first chosen let the enemy force mate; took choice " << r.dodged + 1 << " instead\n";
     o << "  chose      " << (r.found ? moveName(r.best) : std::string("none"))
       << "  score " << fmt("%+.1f", r.score) << "\n";
     for (const auto& it : r.iterations)
@@ -1050,6 +1209,10 @@ void handleSetup(const std::vector<std::string>& parts) {
         else if (key == "weight_hunt_escape") cfg.huntEscape = std::stod(val);
         else if (key == "weight_hunt_distance") cfg.huntDistance = std::stod(val);
         else if (key == "weight_repetition") cfg.repetition = std::stod(val);
+        else if (key == "mate_moves") cfg.mateMoves = std::max(0, std::min(8, std::stoi(val)));
+        else if (key == "mate_seconds") cfg.mateSeconds = std::max(0.0, std::stod(val));
+        else if (key == "mate_defend") cfg.mateDefend = val != "0" && val != "False";
+        else if (key == "aggression") cfg.aggression = std::max(0.0, std::min(100.0, std::stod(val)));
         else if (key.rfind("activity_", 0) == 0) {
             PieceType t2 = typeFromName(key.substr(9));
             if (t2 != NONE) cfg.activity[t2] = std::stod(val);
@@ -1095,6 +1258,8 @@ void handlePosition(const std::string& line) {
         board.cell[i] = c;
     }
     board.recompute();
+    hadRoyal[0] = board.royal[0] >= 0;
+    hadRoyal[1] = board.royal[1] >= 0;
     auto turn = split(fields[1]);
     sideToMove = (!turn.empty() && turn[0] == "B") ? 1 : 0;
     std::cout << "ok\n";
@@ -1158,7 +1323,8 @@ int main() {
             std::cout << "info depth " << r.depthReached << " score " << r.score
                       << " nodes " << total << " seldepth " << st.seldepth
                       << " time " << fmt("%.3f", used)
-                      << " nps " << fmt("%.0f", used > 0 ? total / used : 0.0) << "\n" << std::flush;
+                      << " nps " << fmt("%.0f", used > 0 ? total / used : 0.0)
+                      << " mate " << r.mateIn << " dodged " << r.dodged << "\n" << std::flush;
             writeLog(r, sideToMove, depth, seconds, gamePly, used);
             continue;
         }

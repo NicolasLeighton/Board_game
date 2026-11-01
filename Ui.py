@@ -657,7 +657,12 @@ class Menu:
             elif key.startswith("side"):
                 self.side = key[4:]
             elif key.startswith("diff"):
-                self.difficulty = int(key[4:])
+                index = int(key[4:])
+                if index == getattr(self, "custom_index", -1):
+                    # Custom: choosing it opens its page; it becomes the
+                    # level only once that page is saved.
+                    return {"mode": "custom"}
+                self.difficulty = index
             elif key == "start":
                 return {"mode": self.mode, "difficulty": self.difficulty,
                         "side": self.side}

@@ -262,9 +262,11 @@ def parse_setup() -> List[Tuple[int, int, str, str]]:
             )
         taken[(row, col)] = owner
 
+    # No General is allowed - an opening still being laid out, or one for
+    # the sandbox - but never two.
     royals = sum(1 for _, _, o, n in placements if o == "W" and n == ROYAL)
-    if royals != 1:
-        raise ValueError(f"{name_of} has {royals} {ROYAL}s; it needs exactly one.")
+    if royals > 1:
+        raise ValueError(f"{name_of} has {royals} {ROYAL}s; a side can have only one.")
     return placements
 
 
@@ -787,6 +789,12 @@ class GameState:
         # How often each position has been seen, for the repetition draw.
         self.seen: Dict[Tuple, int] = {self.position_key(): 1}
         self.version = 0
+        if not config.SANDBOX and not self.any_legal_moves("W"):
+            # An empty opening, say: nothing to play. The sandbox is where
+            # a board like that is filled in.
+            self.phase = "gameover"
+            self.message = ("Nothing to play - White has no move. Lay out an opening "
+                            "in Config, or turn on the sandbox.")
 
     def position_key(self) -> Tuple:
         """Everything that makes two positions the same: every piece on
