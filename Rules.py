@@ -770,7 +770,10 @@ class GameState:
         round for the third time: a draw.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, free: bool = False) -> None:
+        # Free board: the sandbox rules - no turns, and pieces go wherever
+        # they are put. Chosen on the menu, for this game only.
+        self.free = free
         self.reset()
 
     def reset(self) -> None:
@@ -789,12 +792,12 @@ class GameState:
         # How often each position has been seen, for the repetition draw.
         self.seen: Dict[Tuple, int] = {self.position_key(): 1}
         self.version = 0
-        if not config.SANDBOX and not self.any_legal_moves("W"):
-            # An empty opening, say: nothing to play. The sandbox is where
+        if not self.free and not self.any_legal_moves("W"):
+            # An empty opening, say: nothing to play. Free board is where
             # a board like that is filled in.
             self.phase = "gameover"
             self.message = ("Nothing to play - White has no move. Lay out an opening "
-                            "in Config, or turn on the sandbox.")
+                            "in Config, or choose Free board on the menu.")
 
     def position_key(self) -> Tuple:
         """Everything that makes two positions the same: every piece on
@@ -811,6 +814,7 @@ class GameState:
         sharing mutable state with the drawing thread."""
         clone = GameState.__new__(GameState)
         clone.board = self.board.clone()
+        clone.free = self.free
         clone.turn = self.turn
         clone.phase = self.phase
         clone.winner = self.winner
@@ -853,7 +857,7 @@ class GameState:
         but in a sandbox, where anything goes, both can at once."""
         if self.phase != "battle":
             return []
-        sides = ("W", "B") if config.SANDBOX else (self.turn,)
+        sides = ("W", "B") if self.free else (self.turn,)
         found = []
         for side in sides:
             royal = self.board.royal_pos(side)
@@ -932,7 +936,7 @@ class GameState:
         return event
 
     # --- the sandbox --------------------------------------------------------
-    # SANDBOX in config.py: no turns, and pieces go wherever they are put.
+    # Free board, from the menu: no turns, and pieces go wherever they are put.
     # Nothing here asks whose turn it is or whether the move is legal, and
     # the turn never changes - but capturing works as in a game, and every
     # change still goes in the move log.
@@ -985,6 +989,6 @@ class GameState:
         self.version += 1
         self.last_move = last
         self.message = (f"{self.player_name(enemy)} is in check." if event["check"]
-                        else "Sandbox - move anything anywhere.")
+                        else "Free board - move anything anywhere.")
         self._record(record, mover, event["check"])
         return event

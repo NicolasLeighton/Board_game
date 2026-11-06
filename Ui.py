@@ -32,7 +32,7 @@ except ImportError:          # pragma: no cover - sound just degrades quietly
     np = None
 
 from config import (BOARD_FLIP_DELAY_MS, FLIP_WHEN_BLACK, FREE_ARROWS,
-                    KNIGHT_ARROW_PATH, MOVEMENT_TYPE, SANDBOX,
+                    KNIGHT_ARROW_PATH, MOVEMENT_TYPE,
                     SHOW_MOVEMENT_HINTS)
 
 if MOVEMENT_TYPE not in (1, 2, 3):
@@ -524,7 +524,9 @@ class Menu:
         y = self._option(screen, "ai", "Play against the computer",
                          cx, y, width, button_h, self.mode == "ai") + gap
         y = self._option(screen, "watch", "Watch the computer play itself",
-                         cx, y, width, button_h, self.mode == "watch") + gap * 2
+                         cx, y, width, button_h, self.mode == "watch") + gap
+        y = self._option(screen, "free", "Free board - no turns, move anything anywhere",
+                         cx, y, width, button_h, self.mode == "free") + gap * 2
 
         if self.mode == "ai":
             # Nobody has a side when the computer plays itself.
@@ -652,7 +654,7 @@ class Menu:
         for key, rect in self.buttons.items():
             if key in ("start", "config") or not rect.collidepoint(pos):
                 continue
-            if key in ("human", "ai", "watch"):
+            if key in ("human", "ai", "watch", "free"):
                 self.mode = key
             elif key.startswith("side"):
                 self.side = key[4:]
@@ -859,7 +861,7 @@ class GameView:
         moving = self.animation is not None and not self.animation.get("landed")
         if moving or self.state.phase == "gameover":
             return
-        if SANDBOX:
+        if self.state.free:
             self.sandbox_click(pos)
             return
         if not self.controls(self.state.turn):
@@ -962,7 +964,7 @@ class GameView:
         self.on_event(event)
 
     def left_press(self, pos) -> None:
-        slot = self.pool_tile_at(pos) if SANDBOX else None
+        slot = self.pool_tile_at(pos) if self.state.free else None
         if slot is not None:
             # A pool tile: picked, and picked up to drag. Pressing the one
             # already picked and letting go puts it down again.
@@ -1002,7 +1004,7 @@ class GameView:
                 self.clear_premove()
                 self.pool_pick = None
             return
-        if SANDBOX:
+        if self.state.free:
             self.sandbox_drop(drag, pos)
         elif self.controls(self.state.turn) and self.state.phase != "gameover":
             self.drop_dragged(drag, pos)
@@ -1082,9 +1084,9 @@ class GameView:
             return
         over = self.square_from_mouse(drag["pos"])
         if over is not None and (over in self.legal_targets
-                                 or (SANDBOX and self.state.board.at(*over) is None)):
+                                 or (self.state.free and self.state.board.at(*over) is None)):
             self.highlight(screen, over, SELECTED, HIGHLIGHT_WIDTH)
-        elif over is None and SANDBOX and not drag.get("pool"):
+        elif over is None and self.state.free and not drag.get("pool"):
             # Off the board: let go here and it is gone.
             x, y = drag["pos"]
             draw_ring(screen, CAPTURE, (x, y), L.cell_w * 0.62, HIGHLIGHT_WIDTH)
@@ -1759,7 +1761,7 @@ class GameView:
             y += img.get_height() + 4
             y = blit_text(screen, F.small, self.state.message, MUTED, x, y, text_w)
         else:
-            turn = "Sandbox" if SANDBOX else f"{self.state.player_name()} to move"
+            turn = "Free board" if self.state.free else f"{self.state.player_name()} to move"
             img = F.big.render(fit_text(F.big, turn, text_w), True,
                                MUTED if self.thinking else TEXT)
             screen.blit(img, (x, y))
@@ -1787,7 +1789,7 @@ class GameView:
         y += L.pad
 
         self.pool_tiles = {}
-        if SANDBOX:
+        if self.state.free:
             y = self.draw_pool(screen, x, y, text_w)
             pygame.draw.line(screen, PANEL_LINE, (x, y), (x + text_w, y))
             y += L.pad

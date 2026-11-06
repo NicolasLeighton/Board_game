@@ -39,19 +39,6 @@ BOARD_RADIUS = 5
 
 
 # ======================================================================
-# Sandbox
-# ======================================================================
-# For showing the game rather than playing it. With this on there are no
-# turns and no opponent: drag any piece, of either colour, to any empty
-# point or onto an enemy piece, whether or not it could move there.
-# Clicking a piece still shows where it could legally go. Drag a piece off
-# the board to remove it; the side panel holds a pool of every piece for
-# both sides, to click or drag onto empty points. A General can't be
-# captured, and a side can only have one.
-SANDBOX = False
-
-
-# ======================================================================
 # Rule switches
 # ======================================================================
 

@@ -53,8 +53,6 @@ SETTINGS: List[Dict] = [
     {"group": "Rules"},
     {"key": "GENERALS_CANT_TOUCH", "label": "Generals can't touch", "kind": "bool",
      "help": "the two Generals may never stand side by side"},
-    {"key": "SANDBOX", "label": "Sandbox", "kind": "bool",
-     "help": "no turns, no opponent: move anything anywhere"},
 
     {"group": "Controls"},
     {"key": "MOVEMENT_TYPE", "label": "Moving pieces", "kind": "choice",

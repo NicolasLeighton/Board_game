@@ -121,8 +121,18 @@ The lower half of each tile is a diagram of how the piece moves:
 
 ## Playing
 
-Three modes from the menu: two players, against the computer, or watching
-the computer play itself. Five difficulties from Recruit to Marshal.
+Four modes from the menu: two players, against the computer, watching
+the computer play itself, or **Free board**. Five difficulties from Recruit
+to Marshal, plus Custom.
+
+**Free board** has no turns and no opponent. Drag any piece, of either
+colour, to any empty point or onto an enemy piece, whether or not it could
+move there; clicking a piece still shows where it could legally go. Drag a
+piece off the board to remove it. The side panel holds a pool of every
+piece for both sides, to click or drag onto empty points. A General can't
+be captured, and a side can only have one, so his tile works only while
+that side has none. It used to be the `SANDBOX` switch in `config.py`;
+now it's chosen for one game, from the menu.
 
 | | |
 |---|---|
@@ -156,7 +166,7 @@ the computer play itself. Five difficulties from Recruit to Marshal.
   moves him. "Clear the board" empties it altogether.
 - **Save & restart** first checks the game would start with the new
   settings: at most one General, an opening that fits the board, and so on.
-  An empty opening saves too, for laying one out in the sandbox. A game
+  An empty opening saves too, for laying one out on a Free board. A game
   started from an opening where White can't move simply says so.
   If something's wrong it says what, and nothing is written. Otherwise it
   writes the values into `config.py`, keeps every comment, and restarts
@@ -171,7 +181,6 @@ the computer play itself. Five difficulties from Recruit to Marshal.
 |---|---|
 | `BOARD_ORIENTATION` | `"point"` or `"flat"`: a corner or a flat side of the board at each army's back. See The board |
 | `BOARD_RADIUS` | how many rings of points surround the centre one. 5 is Gliński's 91 points; 4 gives 61, 6 gives 127 |
-| `SANDBOX` | display mode: no turns and no opponent. Drag any piece anywhere, or off the board to remove it; the panel holds a pool of every piece for both sides, to click or drag onto empty points. A side can only have one General, so his tile works only while that side has none |
 | `MOVEMENT_TYPE` | `1` click or drag, `2` click only, `3` drag only |
 | `WHITE_SETUP` | the opening with the point at the back: one line per rank, one token per file. Lay out your own side only |
 | `WHITE_SETUP_FLAT` | the opening with the flat side at the back: one line per row, one token per point, so the lines grow by one each rank |

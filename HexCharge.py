@@ -295,13 +295,15 @@ def build_match(window: "Window", setup):
     is playing - returned as {owner: player}, which is empty for a game
     between two people and holds both sides when the computer plays
     itself."""
-    state = GameState()
-
-    if config.SANDBOX:
-        # Display mode: no opponent and no turns, whatever the menu said.
-        state.message = "Sandbox - move anything anywhere."
+    if setup["mode"] == "free":
+        # Free board: no opponent and no turns. Drag any piece anywhere,
+        # off the board to remove it, or in from the pool beside it.
+        state = GameState(free=True)
+        state.message = "Free board - move anything anywhere."
         view = Ui.GameView(window.layout, window.fonts, state, human_sides=("W", "B"))
         return state, view, {}
+
+    state = GameState()
 
     if setup["mode"] == "human":
         # One person drives both armies, so the view accepts input for both.
