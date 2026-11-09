@@ -1,29 +1,116 @@
 # Hex Charge
 
-Charge on a hexagonal board. The board is a hexagon of hexagons, as in
-Gliński's hex chess, and every piece moves along the six **orthogonal**
-lines: up and down its file, and the four lines that cross to the
-neighbouring files. There is no diagonal movement anywhere.
-
-A captured piece is gone for good, and nothing promotes. Play against a
-compiled C++ opponent or a second person.
-
-Built from Salvo, so it shares Salvo's controls, menu, pieces, engine and
-tooling.
+A chess-like strategy game on a six-sided board, for two players or
+against the computer. The board is a hexagon of points joined by lines,
+and every piece moves along the six lines through its point.
 
 ---
 
-## Running it
+## What it needs
 
-```
-g++ -O2 -std=c++17 -o hexcharge_engine engine.cpp
-python3 HexCharge.py
-```
+- **Python 3.9 or newer** - [python.org/downloads](https://www.python.org/downloads/).
+  On Windows, tick **"Add python.exe to PATH"** in the installer.
+- **pygame** and **numpy** (numpy makes the sounds):
 
-Needs Python 3.9+, pygame, numpy (for sound) and any C++17 compiler. On
-Windows the binary is `hexcharge_engine.exe`; see BUILD.md.
+  ```
+  pip install pygame numpy
+  ```
+
+- **The engine**, the computer opponent, which is written in C++. The game
+  won't start without it, even for two players.
+  - **Windows:** `hexcharge_engine.exe` is already included. Nothing to do.
+  - **Mac or Linux, or after changing `engine.cpp`:** build it with any
+    C++17 compiler:
+
+    ```
+    g++ -O2 -std=c++17 -o hexcharge_engine engine.cpp
+    ```
+
+    On Windows that needs MinGW, and the file must be called
+    `hexcharge_engine.exe`. See BUILD.md.
+
+## How to run it
+
+1. Download the code: the green **Code** button on GitHub, then
+   **Download ZIP**, and extract it. Or `git clone` it.
+2. Open a terminal in that folder. On Windows: open the folder, click the
+   address bar, type `cmd` and press Enter.
+3. Run:
+
+   ```
+   python HexCharge.py
+   ```
+
+   On Mac and Linux it may be `python3 HexCharge.py`.
+
+If it says the engine is missing, see **What it needs** above.
 
 ---
+
+## How to play
+
+### The menu
+
+| Option | |
+|---|---|
+| Two players | you and a friend take turns on one computer |
+| Play against the computer | choose your side and how strong it is |
+| Watch the computer play itself | |
+| Free board | no turns, no opponent: move any piece anywhere to try ideas or set up a position. Drag a piece off the board to remove it; the panel on the right has every piece to add |
+
+**How strong?** Recruit (easiest), Soldier, Sergeant, Captain, Marshal
+(hardest), or **Custom**, where you set how far it looks ahead, how often
+it slips, and how aggressive it is. Every level sees a forced checkmate a
+few moves away.
+
+**Config** changes the rules and the board: its size, which way it
+faces, and the starting position.
+
+### The pieces
+
+White's pieces are red and moves first; Black's are black. Each piece
+shows its name in two letters, and the small drawing under it shows how
+it moves. Click a piece to see every point it can reach.
+
+| | Piece | Moves |
+|---|---|---|
+| Ch | Chariot | any distance along a line |
+| Kn | Knight | jumps: two points along a line, then one more turned to the side. It jumps over anything in between |
+| Gu | Guard | one or two steps. The second step may turn, but the point in between must be empty |
+| Cn | Cannon | slides like a Chariot, but to capture it must jump over exactly one piece, of either colour, to reach its target |
+| Pw | Pawn | one step along any line |
+| Ge | General | one step along any line. Lose him and you lose |
+
+You capture by moving onto an enemy piece. A captured piece is gone for
+good, and nothing promotes.
+
+### Winning
+
+Attacking the enemy General is **check**, and a player must always get
+their own General out of check.
+
+- **Checkmate:** the General is in check and has no way out. That side loses.
+- **Draw:** a player has no legal move but isn't in check (stalemate), or
+  the same position comes up for the third time.
+
+### Controls
+
+| | |
+|---|---|
+| Left click a piece, then a point | move it. You can also drag it there |
+| Click while the computer is thinking | queue your next move |
+| Right click / right drag | mark a point / draw an arrow |
+| **R** | restart |
+| **Esc** | back to the menu |
+| **C** / **X** | deselect / clear marks and arrows |
+| **M** | sound on or off |
+| **F11** | full screen |
+
+---
+
+*The rest of this file is the reference for the rules and every setting.
+Hex Charge grew out of Salvo, a square-board game with the xiangqi cannon,
+and moved its design onto Gliński's hexagonal board.*
 
 ## The board
 
